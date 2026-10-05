@@ -1,0 +1,20 @@
+{
+  "about": "Per-stage latency of commanding a DeepRacer over the internet. Each stage is lognormal given by median and p99 (sigma = ln(p99/median) / 2.326). loss = probability a one-way leg needs a TCP retransmit (+rto_ms). All values are estimates until replaced by tools/measure_latency.py output from a real car.",
+  "src": "estimate",
+  "rto_ms": 200,
+  "stages": {
+    "wifi_one_way":        {"median_ms": 2.5, "p99_ms": 35,  "loss": 0.005, "note": "802.11ac last hop; retries and power-save spikes"},
+    "onboard_api":         {"median_ms": 8,   "p99_ms": 45,  "note": "nginx auth_request to /auth + Flask handler on the Atom"},
+    "onboard_service_call":{"median_ms": 35,  "p99_ms": 160, "note": "extra for routes that call a ROS service synchronously (start_stop, drive_mode, battery)"},
+    "ros_to_servo":        {"median_ms": 3,   "p99_ms": 12,  "note": "manual_drive topic -> ctrl_node -> servo_node, before waiting for the next PWM frame"},
+    "camera_capture_to_stream": {"median_ms": 70, "p99_ms": 160, "note": "exposure + capture + MJPEG encode + web stream"},
+    "tracker":             {"median_ms": 50,  "p99_ms": 90,  "note": "external overhead camera pose, ~30 Hz"}
+  },
+  "new_connection": "one extra round trip for TCP, one for TLS 1.3, over the whole path",
+  "wan": {
+    "none": null,
+    "tunnel-us":   {"one_way": {"median_ms": 22, "p99_ms": 90},  "loss": 0.002, "spike": {"p": 0.003, "ms": 400}, "note": "cloud sandbox (US) -> tunnel edge -> home broadband (US)"},
+    "tunnel-intl": {"one_way": {"median_ms": 75, "p99_ms": 220}, "loss": 0.004, "spike": {"p": 0.005, "ms": 600}, "note": "sandbox and car on different continents"}
+  },
+  "use": "When the twin runs behind a real tunnel the internet leg is real: use wan none. wan profiles are for local runs only."
+}

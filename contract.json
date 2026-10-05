@@ -1,0 +1,124 @@
+{
+  "about": "How the grader builds, starts and talks to your twin. Fixed: never edit. Placeholders in {} are filled by the grader. Language, libraries and architecture are your choice; record it in sim/DECISION.md.",
+  "version": 0,
+  "build": {
+    "cmd": [
+      "sim/build"
+    ],
+    "within_s": 900,
+    "note": "executable, run once from the repo root on a clean Linux x86_64 box (spec in the score); may fetch dependencies; must leave sim/run ready"
+  },
+  "start": [
+    "sim/run",
+    "--car-port",
+    "{car_port}",
+    "--tracker-port",
+    "{tracker_port}",
+    "--admin-port",
+    "{admin_port}",
+    "--seed",
+    "{seed}",
+    "--latency",
+    "{latency}",
+    "--wan",
+    "{wan}",
+    "--password",
+    "{password}"
+  ],
+  "flags_from_size": {
+    "L": [
+      "--watchdog-ms",
+      "{watchdog_ms}",
+      "--cars",
+      "{cars}"
+    ]
+  },
+  "ready": {
+    "url": "http://127.0.0.1:{admin_port}/admin/ready",
+    "status": 200,
+    "within_s": 20
+  },
+  "decision_record": {
+    "path": "sim/DECISION.md",
+    "sections": [
+      "Choice",
+      "Alternatives considered",
+      "Evidence",
+      "Risks",
+      "What would change it"
+    ],
+    "note": "why this language, libraries and architecture; evidence means something you measured or tried"
+  },
+  "clock": "every t is the twin process's monotonic clock in seconds, the same across car, tracker and admin",
+  "timing": "thresholds the latency, tracker, realtime and camera checks use: car/timing.json twin",
+  "car": {
+    "base": "https://127.0.0.1:{car_port}",
+    "api": "the real car's routes and responses: car/spec.json web_api",
+    "tls": "HTTPS with a self-signed certificate, like the car; clients do not verify it"
+  },
+  "tracker": {
+    "GET /pose": {
+      "t": "s, twin clock: the time this pose was true; served late by the tracker stage and refreshed at the tracker rate",
+      "seq": "int",
+      "x": "m",
+      "y": "m",
+      "yaw": "rad",
+      "v": "m/s"
+    }
+  },
+  "admin": {
+    "bind": "127.0.0.1 only",
+    "GET /admin/ready": "200 when every server and the physics loop are running",
+    "GET /admin/state": {
+      "t": "s",
+      "x": "m",
+      "y": "m",
+      "yaw": "rad",
+      "v": "m/s",
+      "steer_rad": "actual",
+      "throttle_cmd": "applied msg.throttle",
+      "angle_cmd": "applied msg.angle",
+      "active": "bool",
+      "mode": "manual|autonomous|calibration",
+      "battery": "0-10"
+    },
+    "GET /admin/log?since=<seq>": "JSON lines of events with seq > since, oldest first; every line is {\"event\": <name below>, ...its fields}",
+    "POST /admin/reset": "{seed?, pose?}: reset world and clock",
+    "events": {
+      "request": {
+        "seq": "int",
+        "t_recv": "s: when the twin's socket had the whole request, before the simulated Wi-Fi leg",
+        "t_done": "s: when the response left the twin's socket",
+        "route": "str",
+        "status": "int",
+        "new_conn": "bool"
+      },
+      "applied": {
+        "seq": "int",
+        "t": "s: when the command reached the simulated servo (after onboard, ROS and PWM-frame delays)",
+        "kind": "servo|mode|enable",
+        "request_seq": "seq of the request event that caused it",
+        "value": "object"
+      },
+      "off_track": {
+        "t": "s",
+        "x": "m",
+        "y": "m"
+      },
+      "collision": {
+        "t": "s",
+        "obstacle": "id"
+      },
+      "lap": {
+        "t": "s",
+        "lap": "int",
+        "seconds": "float"
+      }
+    },
+    "GET /admin/ticks": {
+      "hz": "nominal physics rate",
+      "intervals_ms": "the last >= 1000 physics tick intervals, oldest first"
+    }
+  },
+  "status": "draft: fields marked in DECISIONS.md may change before version 1"
+}

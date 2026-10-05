@@ -1,0 +1,78 @@
+{
+  "model": "AWS DeepRacer (original and Evo), 1/18 scale, 4WD, Ackermann steering",
+  "hardware": {
+    "cpu": {"value": "Intel Atom", "src": "spec"},
+    "ram_gb": {"value": 4, "src": "spec"},
+    "storage_gb": {"value": 32, "src": "spec"},
+    "wifi": {"value": "802.11ac", "src": "spec"},
+    "camera": {"value": "4 MP, MJPEG; Evo: 2x 4 MP stereo", "src": "spec"},
+    "lidar": {"value": "Evo only: 360 deg, 12 m radius", "src": "spec"},
+    "imu": {"value": "accelerometer + gyroscope (not exposed by the web API)", "src": "spec"},
+    "drive_battery": {"value": "7.4 V 1100 mAh LiPo", "src": "spec"},
+    "compute_battery": {"value": "13600 mAh USB-C PD", "src": "spec"}
+  },
+  "vehicle": {
+    "wheelbase_m": {"value": 0.165, "src": "estimate"},
+    "max_steer_deg": {"value": 30, "src": "estimate", "note": "DeepRacer action spaces use +/-30 deg"},
+    "steer_slew_deg_per_s": {"value": 600, "src": "estimate", "note": "typical hobby servo, 0.10 s / 60 deg"},
+    "top_speed_mps": {"value": 4.0, "src": "estimate", "note": "action-space ceiling; physical top speed unmeasured"},
+    "reverse_speed_fraction": {"value": 0.5, "src": "estimate"},
+    "motor_time_constant_s": {"value": 0.25, "src": "estimate"},
+    "coast_decel_mps2": {"value": 1.5, "src": "estimate"},
+    "max_lateral_accel_mps2": {"value": 7.0, "src": "estimate"},
+    "servo_pwm_hz": {"value": 50, "src": "estimate"},
+    "battery_speed_factor_empty": {"value": 0.85, "src": "estimate"}
+  },
+  "web_api": {
+    "transport": {"value": "HTTPS, self-signed certificate, nginx in front of Flask", "src": "code:aws-deepracer-webserver-pkg/webserver_pkg/login.py"},
+    "auth": {
+      "value": "GET / returns a page with <meta name=\"csrf-token\">; POST /login (form field password) sets cookie deepracer_token, max_age 1 h; nginx auth_request to /auth on every request refreshes it (sliding)",
+      "src": "code:aws-deepracer-webserver-pkg/webserver_pkg/login.py"
+    },
+    "csrf": {"value": "Flask-WTF CSRFProtect on every POST/PUT; header X-CSRFToken", "src": "code:aws-deepracer-webserver-pkg/webserver_pkg/webserver.py"},
+    "routes": {
+      "src": "code:aws-deepracer-webserver-pkg/webserver_pkg/*.py",
+      "value": {
+        "PUT /api/manual_drive": "{angle, throttle, max_speed}; angle, throttle in [-1, 1] else api_fail; publishes ServoCtrlMsg",
+        "PUT /api/drive_mode": "{drive_mode: manual|autonomous}; ROS service call",
+        "PUT /api/start_stop": "{start_stop: start|stop}; ROS service call",
+        "PUT /api/max_nav_throttle": "{throttle: 0-100}; autonomous mode only",
+        "GET /api/control_modes_available": "{control_modes_available: [manual, autonomous, calibration]}",
+        "GET /api/get_battery_level": "{battery_level, success}; ROS service call",
+        "GET /api/get_sensor_status": "{camera_status, stereo_status, lidar_status: connected|not_connected|error}",
+        "GET /api/get_device_info": "{hardware_version, software_version, success}",
+        "GET /route?topic=<mjpeg topic>&width=&height=": "multipart MJPEG stream; topics /camera_pkg/display_mjpeg (current), /video_mjpeg (older consoles)"
+      }
+    },
+    "manual_drive_mapping": {
+      "src": "code:aws-deepracer-webserver-pkg/webserver_pkg/vehicle_control.py",
+      "value": {
+        "angle_categories": "|a| >= 0.8 -> 0.8; >= 0.5 -> 0.5; > 0 -> 0.3; 0 -> 0 (sign kept)",
+        "throttle_categories": "same categories as angle",
+        "throttle_rescale": "s = 1 + (1 - max_speed) * 4; a = (2*1.0 - 4*0.8) / s^2; b = (4*0.8 - 1.0) / s; out = sign(t) * (a t^2 + b |t|)",
+        "rescale_examples": [[0.3, 0.1, 0.1383742911153119], [0.8, 0.5, 0.5013333333333334], [0.8, 1.0, 0.992]],
+        "published_message": "msg.angle = -angle_category; msg.throttle = -rescaled_throttle",
+        "max_speed_check": "required, but not range-checked"
+      }
+    },
+    "signs": {
+      "value": "negative API throttle drives forward; positive API angle steers right (msg.angle > 0 is left, ROS convention)",
+      "src": "client:thu2004/deepracer-vehicle-api",
+      "note": "inferred from the gamepad example and the sign inversion; verify on a car"
+    }
+  },
+  "onboard": {
+    "watchdog": {"value": "none: the last manual command holds until a new one or stop", "src": "code:aws-deepracer-ctrl-pkg/ctrl_pkg/src/ctrl_state.cpp"},
+    "stop_behaviour": {"value": "inactive state publishes throttle 0", "src": "code:aws-deepracer-ctrl-pkg/ctrl_pkg/src/ctrl_state.cpp"},
+    "servo_topic_qos": {"value": "best effort, keep last 1", "src": "code:aws-deepracer-ctrl-pkg/ctrl_pkg/src/ctrl_state.cpp"},
+    "inference_frame": {"value": "160x120", "src": "code:aws-deepracer-camera-pkg/camera_pkg/src/camera_node.cpp"},
+    "camera_fps": {"value": 15, "src": "estimate"},
+    "boot_state": {"value": "manual mode, stopped", "src": "estimate"},
+    "battery_levels": {"value": "integer 0-10", "src": "estimate"}
+  },
+  "not_available_over_the_api": [
+    "vehicle position or speed (needs an external tracker)",
+    "IMU readings",
+    "continuous steering/throttle (manual API rounds to 3 levels a side)"
+  ]
+}

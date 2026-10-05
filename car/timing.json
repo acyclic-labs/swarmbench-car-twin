@@ -1,0 +1,41 @@
+{
+  "about": "Timing budget for driving this car with a swarm. Inputs only: tools/budget.py derives dead time, blind and stopping distance, plan horizon and speed caps per operating point from these and latency.json. Replace estimates with measurements and re-run; requirements follow. The twin section holds the thresholds car-twin's latency/realtime/camera/tracker checks grade against.",
+  "inputs": {
+    "lateral_margin_m":    {"value": 0.2,  "src": "estimate", "note": "free lane each side of the car"},
+    "coast_decel_mps2":    {"value": 1.5,  "src": "estimate", "note": "spec.json vehicle; stop publishes throttle 0, so the car coasts"},
+    "brake_decel_mps2":    {"value": 3.0,  "src": "estimate", "note": "active braking via a reverse-throttle pulse"},
+    "watchdog_s":          {"value": 0.3,  "src": "design",   "note": "relay stops the car this long after its plan expires or the link drops"},
+    "plan_margin_s":       {"value": 0.4,  "src": "design"},
+    "relay_rate_hz":       {"value": 20,   "src": "design"},
+    "servo_pwm_hz":        {"value": 50,   "src": "estimate"},
+    "servo_step_deg":      {"value": 15,   "src": "design",   "note": "typical correction; slew time = step / spec.json steer_slew_deg_per_s"},
+    "steer_slew_deg_per_s":{"value": 600,  "src": "estimate"},
+    "decision": {
+      "src": "estimate: measure from runs/<id>/metrics.json",
+      "fast_agent": {"median_ms": 1000, "p99_ms": 3000},
+      "strong_agent": {"median_ms": 6000, "p99_ms": 15000},
+      "swarm_delegation": {"median_ms": 30000, "p99_ms": 90000}
+    }
+  },
+  "paths": {
+    "observe": ["tracker", "wifi_one_way", "wan"],
+    "command": ["wan", "wifi_one_way", "onboard_api", "ros_to_servo", "pwm_frame", "servo_slew"],
+    "note": "wan is dropped when the relay sits on the car's LAN"
+  },
+  "operating_points": {
+    "walk": {"v_mps": 0.3, "relay": "cloud", "wan": "tunnel-us"},
+    "demo": {"v_mps": 1.0, "relay": "lan",   "wan": "tunnel-us"},
+    "fast": {"v_mps": 2.0, "relay": "lan",   "wan": "tunnel-us"}
+  },
+  "samples": 20000,
+  "twin": {
+    "about": "Thresholds the car-twin checks use. The twin must be tighter than what it models.",
+    "probes": 300,
+    "latency_band": {"p50": 0.20, "p99": 0.35, "floor_ms": 1.0},
+    "applied_band": {"p50": 0.20, "floor_ms": 2.0},
+    "concurrency": {"clients": 8, "max_p50_inflation": 0.10},
+    "physics": {"min_hz": 200, "max_tick_jitter_p99_ms": 2.0, "max_drift": 0.001, "drift_window_s": 10},
+    "camera": {"fps": 15, "fps_tolerance": 0.10, "window_s": 4, "streams_open_during_realtime": 2},
+    "tracker": {"hz": 30, "hz_tolerance": 0.10, "age_band": 0.25}
+  }
+}
